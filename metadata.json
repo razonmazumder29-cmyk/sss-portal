@@ -1,0 +1,6 @@
+{
+  "name": "SSS Chattogram-02 Zone Employee Portal",
+  "description": "Society for Social Service (SSS) Chattogram-02 Zone Staff Database, Milestone Celebrations, Branch Transfer Management, and Automated Outlook/Gmail Greetings Portal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
