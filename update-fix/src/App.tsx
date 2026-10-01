@@ -333,16 +333,23 @@ export default function App() {
     try {
       setCloudStatus('syncing');
       await CloudService.saveMetadata(meta, currentUser.fullName);
+      const ok = await CloudService.verifyMetadataOnServer(meta);
+      if (!ok) {
+        throw new Error(language === 'bn'
+          ? 'সার্ভারে সেভ হয়েছে বলে নিশ্চিত হওয়া যায়নি'
+          : 'Could not confirm the change on the server');
+      }
       setCloudStatus('connected');
       showToast(language === 'bn' ? 'কাঠামো ক্লাউডে সংরক্ষিত হয়েছে' : 'Structure updated in cloud');
     } catch (err) {
       console.error('Metadata save error:', err);
       setCloudStatus('offline');
-      showToast(
+      const reason = err instanceof Error ? err.message : String(err);
+      // alert ব্যবহার করা হয়েছে যাতে বার্তাটি চোখ এড়িয়ে না যায়
+      window.alert(
         (language === 'bn'
-          ? 'ক্লাউডে সেভ হয়নি, শুধু এই কম্পিউটারে রাখা হয়েছে। কারণ: '
-          : 'Cloud save failed, kept on this computer only. Reason: ') +
-          (err instanceof Error ? err.message : String(err))
+          ? 'ক্লাউডে সেভ হয়নি! পরিবর্তন শুধু এই কম্পিউটারে আছে, অ্যাপ বন্ধ করলে হারিয়ে যেতে পারে।\n\nকারণ: '
+          : 'Cloud save failed! The change exists only on this computer and may be lost.\n\nReason: ') + reason
       );
     }
   };
