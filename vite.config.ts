@@ -5,7 +5,7 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
-    base: './',
+    base: './', // ডেস্কটপ অ্যাপে ফাইল থেকে লোড হওয়ার জন্য
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
