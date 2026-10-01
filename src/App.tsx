@@ -176,7 +176,7 @@ export default function App() {
       }
       setEmployees(updated);
       StorageService.saveEmployees(updated);
-      showToast(language === 'bn' ? 'অফলাইন ক্যাশে সংরক্ষিত হয়েছে' : 'Saved to local cache');
+      showToast((language === 'bn' ? 'ক্লাউডে সেভ হয়নি, শুধু এই কম্পিউটারে রাখা হয়েছে। কারণ: ' : 'Cloud save failed, kept on this computer only. Reason: ') + (err instanceof Error ? err.message : String(err)));
     }
   };
 
@@ -201,7 +201,7 @@ export default function App() {
       const filtered = employees.filter(e => e.id !== empId);
       setEmployees(filtered);
       StorageService.saveEmployees(filtered);
-      showToast(language === 'bn' ? 'অফলাইন ক্যাশ থেকে সরানো হয়েছে' : 'Removed from offline cache');
+      showToast((language === 'bn' ? 'ক্লাউড থেকে মোছা যায়নি, শুধু এই কম্পিউটার থেকে সরানো হয়েছে। কারণ: ' : 'Cloud delete failed, removed on this computer only. Reason: ') + (err instanceof Error ? err.message : String(err)));
     }
   };
 
@@ -306,7 +306,7 @@ export default function App() {
       const merged = [...employees, ...newItems];
       setEmployees(merged);
       StorageService.saveEmployees(merged);
-      showToast(language === 'bn' ? `${newItems.length} জন কর্মী অফলাইনে সংরক্ষিত হয়েছে!` : `Saved ${newItems.length} staff!`);
+      showToast((language === 'bn' ? 'ক্লাউডে ইমপোর্ট হয়নি, শুধু এই কম্পিউটারে রাখা হয়েছে। কারণ: ' : 'Cloud import failed, kept on this computer only. Reason: ') + (err instanceof Error ? err.message : String(err)));
     }
   };
 
@@ -325,15 +325,32 @@ export default function App() {
 
   // Save Metadata to Cloud
   const handleSaveMetadata = async (meta: { areas?: string[]; branches?: BranchItem[]; designations?: string[] }) => {
+    // আগে এই কম্পিউটারে সংরক্ষণ করে রাখা হচ্ছে
+    if (meta.areas) StorageService.saveAreas(meta.areas);
+    if (meta.branches) StorageService.saveBranches(meta.branches);
+    if (meta.designations) StorageService.saveDesignations(meta.designations);
+
     try {
       setCloudStatus('syncing');
       await CloudService.saveMetadata(meta, currentUser.fullName);
+      const ok = await CloudService.verifyMetadataOnServer(meta);
+      if (!ok) {
+        throw new Error(language === 'bn'
+          ? 'সার্ভারে সেভ হয়েছে বলে নিশ্চিত হওয়া যায়নি'
+          : 'Could not confirm the change on the server');
+      }
       setCloudStatus('connected');
-      showToast(language === 'bn' ? 'কাঠামো ক্লাউডে সংরক্ষিত হয়েছে' : 'Structure updated in cloud');
-    } catch {
-      if (meta.areas) StorageService.saveAreas(meta.areas);
-      if (meta.branches) StorageService.saveBranches(meta.branches);
-      if (meta.designations) StorageService.saveDesignations(meta.designations);
+      showToast(language === 'bn' ? 'কাঠামো ক্লাউডে সংরক্ষিত হয়েছে' : 'Structure updated in cloud');
+    } catch (err) {
+      console.error('Metadata save error:', err);
+      setCloudStatus('offline');
+      const reason = err instanceof Error ? err.message : String(err);
+      // alert ব্যবহার করা হয়েছে যাতে বার্তাটি চোখ এড়িয়ে না যায়
+      window.alert(
+        (language === 'bn'
+          ? 'ক্লাউডে সেভ হয়নি! পরিবর্তন শুধু এই কম্পিউটারে আছে, অ্যাপ বন্ধ করলে হারিয়ে যেতে পারে।\n\nকারণ: '
+          : 'Cloud save failed! The change exists only on this computer and may be lost.\n\nReason: ') + reason
+      );
     }
   };
 

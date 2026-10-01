@@ -3,6 +3,7 @@ import {
   doc, 
   getDocs, 
   getDoc,
+  getDocFromServer,
   setDoc, 
   deleteDoc, 
   onSnapshot, 
@@ -24,6 +25,9 @@ import {
 } from '../data/initialData';
 import { StorageService } from '../utils/storage';
 
+// খালি (undefined) মান বাদ দিয়ে ডেটা পরিষ্কার করে, যাতে ক্লাউডে সেভ ব্যর্থ না হয়
+const clean = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
+
 export const CloudService = {
   // Listeners
   subscribeEmployees(
@@ -36,9 +40,18 @@ export const CloudService = {
         colRef,
         (snapshot) => {
           if (snapshot.empty) {
-            // First time running or empty database: auto-seed initial data
-            this.seedInitialDatabase().catch((err) => console.error('Seed error:', err));
-            onSuccess(StorageService.getEmployees());
+            // শুধু একদম নতুন ডেটাবেসে একবার নমুনা ডেটা বসবে।
+            // কর্মী তালিকা ফাঁকা করে ফেললে আর নমুনা ডেটা ফিরে আসবে না।
+            this.seedInitialDatabase()
+              .then((result) => {
+                if (result === 'exists') {
+                  StorageService.saveEmployees([]);
+                  onSuccess([]);
+                } else if (result === 'error') {
+                  onSuccess(StorageService.getEmployees());
+                }
+              })
+              .catch((err) => console.error('Seed error:', err));
           } else {
             const list: Employee[] = [];
             snapshot.forEach((d) => {
@@ -174,8 +187,12 @@ export const CloudService = {
   },
 
   // Auto Seed Database
-  async seedInitialDatabase(): Promise<void> {
+  async seedInitialDatabase(): Promise<'seeded' | 'exists' | 'error'> {
     try {
+      // ডেটাবেসে আগেই সেটিংস থাকলে বোঝা যায় আগে সেটআপ হয়েছে, তাই আর নমুনা ডেটা বসবে না
+      const existing = await getDoc(doc(db, 'settings', 'config'));
+      if (existing.exists()) return 'exists';
+
       const batch = writeBatch(db);
       // Seed employees
       INITIAL_EMPLOYEES.forEach((emp) => {
@@ -200,8 +217,10 @@ export const CloudService = {
 
       await batch.commit();
       console.log('Firebase central database successfully seeded with initial SSS Chattogram-02 records!');
+      return 'seeded';
     } catch (err) {
       console.error('Error seeding initial Firestore data:', err);
+      return 'error';
     }
   },
 
@@ -213,7 +232,7 @@ export const CloudService = {
       ...emp,
       id
     };
-    await setDoc(docRef, dataToSave, { merge: true });
+    await setDoc(docRef, clean(dataToSave), { merge: true });
 
     // Also record audit log
     await this.logAuditAction({
@@ -308,13 +327,34 @@ export const CloudService = {
     performedBy: string
   ): Promise<void> {
     const docRef = doc(db, 'metadata', 'structure');
-    await setDoc(docRef, metadata, { merge: true });
+    await setDoc(docRef, clean(metadata), { merge: true });
 
     await this.logAuditAction({
       action: 'UPDATE',
       performedBy,
       details: 'Updated administrative dropdown structure in central database'
     });
+  },
+
+  // সেভের পরে সার্ভার থেকে পড়ে যাচাই: নতুন তথ্য সত্যিই ক্লাউডে আছে কি না
+  async verifyMetadataOnServer(
+    metadata: { areas?: string[]; branches?: BranchItem[]; designations?: string[] }
+  ): Promise<boolean> {
+    const snap = await getDocFromServer(doc(db, 'metadata', 'structure'));
+    const data = (snap.data() || {}) as { areas?: string[]; branches?: BranchItem[]; designations?: string[] };
+    if (metadata.branches) {
+      const ids = new Set((data.branches || []).map((b) => b.id));
+      if (!metadata.branches.every((b) => ids.has(b.id))) return false;
+    }
+    if (metadata.areas) {
+      const have = new Set(data.areas || []);
+      if (!metadata.areas.every((a) => have.has(a))) return false;
+    }
+    if (metadata.designations) {
+      const have = new Set(data.designations || []);
+      if (!metadata.designations.every((d) => have.has(d))) return false;
+    }
+    return true;
   },
 
   // Admin User CRUD
@@ -348,7 +388,7 @@ export const CloudService = {
     newEmployees.forEach((emp) => {
       const id = emp.id || 'emp-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
       const ref = doc(db, 'employees', id);
-      batch.set(ref, { ...emp, id }, { merge: true });
+      batch.set(ref, clean({ ...emp, id }), { merge: true });
       count++;
     });
     await batch.commit();

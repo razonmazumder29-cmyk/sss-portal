@@ -1,4 +1,5 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { APP_VERSION } from '../version';
 import { 
   Settings, 
   MapPin, 
@@ -95,6 +96,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [newBranchName, setNewBranchName] = useState('');
   const [newBranchArea, setNewBranchArea] = useState(areas[0] || '');
   const [newBranchCode, setNewBranchCode] = useState('');
+
+  // এরিয়া তালিকা বদলালে শাখার এরিয়া-বাছাই যেন পুরনো (মুছে যাওয়া) এরিয়ায় আটকে না থাকে
+  useEffect(() => {
+    if (areas.length > 0 && !areas.includes(newBranchArea)) {
+      setNewBranchArea(areas[0]);
+    }
+  }, [areas, newBranchArea]);
   const [newDesignation, setNewDesignation] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -256,7 +264,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       id: 'br-' + Date.now(),
       name: newBranchName.trim(),
       area: newBranchArea || areas[0],
-      code: newBranchCode.trim() || undefined
+      // কোড ফাঁকা থাকলে ঘরটিই বাদ যাবে (undefined পাঠালে ক্লাউডে সেভ ব্যর্থ হতো)
+      ...(newBranchCode.trim() ? { code: newBranchCode.trim() } : {})
     };
     const updated = [...branches, newBr];
     setBranches(updated);
@@ -323,6 +332,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             {language === 'bn' 
               ? 'জোনাল ইমেইল ডিরেক্টরি, একাধিক Super Admin ব্যবস্থাপনা, এলাকা-ব্রাঞ্চ কাঠামো ও ক্লাউড ডাটাবেজ ব্যাকআপ'
               : 'Zone email directory, multi-user accounts, branch structure, and backup control'}
+          </p>
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+            {language === 'bn' ? 'অ্যাপ ভার্সন: ' : 'App version: '}v{APP_VERSION}
           </p>
         </div>
 
